@@ -1,0 +1,62 @@
+# Default Atlas configuration
+
+agent:
+  name: "Atlas"
+  default_model: "qwen3:14b"
+  privacy_mode: "local_only"  # local_only or remote_allowed
+
+llm:
+  local:
+    provider: "ollama"
+    base_url: "http://localhost:11434"
+    models:
+      - "qwen3:14b"
+      - "llama3.2"
+      - "mistral"
+
+  remote:
+    # Only used if privacy_mode allows
+    provider: "openai"
+    # api_key from environment: OPENAI_API_KEY
+
+memory:
+  data_dir: "~/.local/share/atlas"
+  retention_days: 365
+
+tools:
+  # API keys are managed securely via:
+  #   1. System keyring (recommended): atlas secrets set <service>
+  #   2. Environment variables (fallback): export <SERVICE>_API_KEY='key'
+  # 
+  # Run 'atlas secrets list' to see all available services
+  # See docs/API_KEY_MANAGEMENT.md for details
+  
+  tavily:
+    enabled: true
+    # Get key at: https://tavily.com
+
+security:
+  # API key storage uses system keyring (Keychain/Secret Service/Credential Locker)
+  # Keys are encrypted and require user authentication
+  # Manage with: atlas secrets <set|get|delete|list>
+  
+  permission_config: "~/.config/atlas/permissions.yaml"
+  audit_log_dir: "~/.local/share/atlas/audit"
+  require_confirmation_level: "high"  # low, medium, high, critical
+
+briefing:
+  news_topics:
+    - "technology"
+    - "AI"
+  max_headlines_per_topic: 3
+
+mcp_servers:
+  - name: "filesystem"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "~"]
+    auto_connect: false
+    
+  - name: "memory"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-memory"]
+    auto_connect: false
