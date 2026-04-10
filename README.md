@@ -61,7 +61,7 @@
 
 | Requirement | Notes |
 |-------------|-------|
-| macOS, Linux, or WSL2 | Primary dev platform is macOS |
+| macOS, Linux, or Windows | Supported natively |
 | Python 3.11+ | Required |
 | [Ollama](https://ollama.ai) | For local LLM inference |
 | [uv](https://astral.sh/uv) *(recommended)* | Fast Python package installer |
@@ -123,11 +123,8 @@ atlas secrets set tavily
 ```bash
 # 1. Create OAuth2 credentials at https://console.cloud.google.com/apis/credentials
 # 2. Download the credentials JSON file
-# 3. Configure each service:
-atlas secrets set gmail
-atlas secrets set calendar
-atlas secrets set google_tasks
-atlas secrets set drive
+# 3. Paste the file's contents into Atlas via the interactive editor:
+atlas secrets set google_oauth
 ```
 
 #### Remote LLM Providers (Optional)
@@ -280,7 +277,8 @@ atlas chat "Upload report.pdf to my Drive"
 atlas chat "Run this Python snippet and show me the output: [code]"
 ```
 
-Code runs inside an isolated Docker container — no host filesystem access.
+Code runs inside an isolated Docker container — no host filesystem access. 
+*Note: You must have Docker running. For convenience, you can run `docker compose build` in the repo root to pre-build the `atlas-sandbox` image.*
 
 ---
 

@@ -7,13 +7,17 @@ echo "🚀 Installing Atlas..."
 echo ""
 
 # Check for Python
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is not installed. Please install Python 3.11+ first."
+if command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+else
+    echo "❌ Python is not installed. Please install Python 3.11+ first."
     exit 1
 fi
 
 # Check Python version
-PYTHON_VERSION=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
+PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -n1 | cut -d'.' -f1,2)
 REQUIRED_VERSION="3.11"
 
 if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$PYTHON_VERSION" | sort -V | head -n1)" != "$REQUIRED_VERSION" ]; then
@@ -41,7 +45,6 @@ fi
 # Install Atlas
 echo ""
 echo "📦 Installing Atlas package..."
-cd atlas
 pip install -e .
 
 if [ $? -eq 0 ]; then

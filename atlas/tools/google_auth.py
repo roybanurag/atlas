@@ -57,11 +57,9 @@ class GoogleServiceAuth:
                 ["calendar", "gmail"] for Tasks which can reuse those credentials).
         """
         self.service_name = service_name
-        self.service_name = service_name
         self.scopes = scopes
         self.token_key = token_filename
         self.api_key_name = api_key_name
-        self.fallback_api_keys = fallback_api_keys or []
     
     def _save_token(self, creds: Credentials) -> None:
         """Serialize and save OAuth2 token to unified secrets vault."""
@@ -115,23 +113,10 @@ class GoogleServiceAuth:
         # Try primary key
         resolved = get_api_key(self.api_key_name)
         
-        # Try fallbacks
         if not resolved:
-            for fallback in self.fallback_api_keys:
-                resolved = get_api_key(fallback)
-                if resolved:
-                    break
-        
-        if not resolved:
-            fallback_hint = ""
-            if self.fallback_api_keys:
-                fallback_hint = (
-                    f"  2. Or reuse an existing credential (if {self.service_name} API is enabled)\n"
-                )
             raise ValueError(
                 f"{self.service_name} credentials not configured. Please either:\n"
                 f"  1. Store credentials path: atlas secrets set {self.api_key_name}\n"
-                f"{fallback_hint}"
                 f"Get OAuth2 credentials at https://console.cloud.google.com/apis/credentials"
             )
         
@@ -192,7 +177,7 @@ GMAIL_AUTH = GoogleServiceAuth(
         'https://www.googleapis.com/auth/gmail.modify',
     ],
     token_filename="gmail_token.json",
-    api_key_name="gmail",
+    api_key_name="google_oauth",
 )
 
 CALENDAR_AUTH = GoogleServiceAuth(
@@ -202,8 +187,7 @@ CALENDAR_AUTH = GoogleServiceAuth(
         'https://www.googleapis.com/auth/calendar.events',
     ],
     token_filename="calendar_token.json",
-    api_key_name="calendar",
-    fallback_api_keys=["gmail"],
+    api_key_name="google_oauth",
 )
 
 DRIVE_AUTH = GoogleServiceAuth(
@@ -213,7 +197,7 @@ DRIVE_AUTH = GoogleServiceAuth(
         'https://www.googleapis.com/auth/drive.file',
     ],
     token_filename="drive_token.json",
-    api_key_name="google_drive",
+    api_key_name="google_oauth",
 )
 
 TASKS_AUTH = GoogleServiceAuth(
@@ -222,6 +206,5 @@ TASKS_AUTH = GoogleServiceAuth(
         'https://www.googleapis.com/auth/tasks',
     ],
     token_filename="tasks_token.json",
-    api_key_name="google_tasks",
-    fallback_api_keys=["calendar", "gmail"],
+    api_key_name="google_oauth",
 )

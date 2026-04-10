@@ -286,24 +286,13 @@ class PermissionManager:
         self._load_grants()
     
     def _get_key(self) -> bytes:
-        """Get or create encryption key from keyring."""
-        key_b64 = keyring_cache.get_password(self.SERVICE_NAME, self.KEY_NAME)
-        if not key_b64:
-            # Generate new key
-            key = Fernet.generate_key()
-            key_b64 = base64.b64encode(key).decode('utf-8')
-            # Store in keyring (with caching)
-            try:
-                keyring_cache.set_password(self.SERVICE_NAME, self.KEY_NAME, key_b64)
-            except Exception as e:
-                # Security: Fail securely if the encryption key cannot be saved
-                raise RuntimeError(
-                    f"Failed to store permission encryption key in keyring: {e}\n"
-                    "Aborting to prevent data loss or DoS against permission store."
-                ) from e
-                
-            return key
-        return base64.b64decode(key_b64)
+        """Get the shared master encryption key.
+        
+        Uses the same key as token encryption to limit keychain prompts
+        to exactly one per session.
+        """
+        from atlas.security.token_encryption import get_encryption_key
+        return get_encryption_key()
 
     def _load_grants(self):
         """Load and decrypt grants from storage."""

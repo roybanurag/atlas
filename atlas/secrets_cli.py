@@ -60,10 +60,39 @@ def secrets_command(
         console.print(f"\n[bold]Setting API key for {service}[/bold]")
         console.print(f"Get your key at: [cyan]{config['url']}[/cyan]\n")
         
-        api_key = Prompt.ask("Enter API key", password=True)
+        if service == "google_oauth":
+            import click
+            import json
+            from atlas.config.paths import get_config_dir
+            
+            console.print("This service requires a Google OAuth credentials.json file.")
+            console.print("An editor will now open. Please paste the FULL contents of your downloaded credentials.json file.")
+            console.print("Save and close the editor when done.")
+            click.pause()
+            
+            pasted_text = click.edit(text="")
+            if pasted_text is None or not pasted_text.strip():
+                console.print("[red]✗[/red] No contents provided. Aborting.")
+                return
+                
+            try:
+                # verify it is valid JSON
+                json.loads(pasted_text)
+            except json.JSONDecodeError:
+                console.print("[red]✗[/red] Invalid JSON provided. Please provide valid credentials.json content.")
+                return
+                
+            # Write it to the config path
+            cred_path = get_config_dir() / "google_oauth.json"
+            cred_path.write_text(pasted_text)
+            
+            # The value we store inside keyring is just the path
+            api_key = str(cred_path)
+        else:
+            api_key = Prompt.ask("Enter API key", password=True)
         
         if secret_manager.set_secret(config["keyring_name"], api_key):
-            console.print(f"[green]✓[/green] API key for {service} stored securely in system keyring")
+            console.print(f"[green]✓[/green] Credentials for {service} stored securely in system keyring")
         else:
             console.print(f"[red]✗[/red] Failed to store API key")
             console.print(f"Fallback: export {config['env_var']}='your-key'")

@@ -69,6 +69,7 @@ class SlackBot:
     def _register_handlers(self):
         """Register Slack event handlers."""
         
+        @self.app.action("approve_remember_permission")
         @self.app.action("approve_permission")
         async def handle_approval(ack, body, action):
             await ack()

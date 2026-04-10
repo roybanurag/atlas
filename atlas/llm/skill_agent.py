@@ -1,7 +1,7 @@
 """Skill Agent — AI-native codebase customization for Atlas.
 
 Inspired by NanoClaw's "skills over features" philosophy: instead of manually
-coding new integrations, describe what you want and the local LLM generates,
+coding new integrations, describe what you want and the LLM generates,
 reviews, and writes the tool module for you.
 
 Usage (CLI):

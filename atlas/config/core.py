@@ -206,34 +206,10 @@ API_KEY_CONFIGS: dict[str, dict[str, str]] = {
         "description": "Google AI API key",
         "url": "https://makersuite.google.com/app/apikey",
     },
-    "google_calendar": {
-        "keyring_name": "google_calendar_credentials_path",
-        "env_var": "GOOGLE_CALENDAR_CREDENTIALS_PATH",
-        "description": "Path to Google Calendar OAuth2 credentials JSON file",
-        "url": "https://console.cloud.google.com/apis/credentials",
-    },
-    "calendar": {
-        "keyring_name": "google_calendar_credentials_path",
-        "env_var": "GOOGLE_CALENDAR_CREDENTIALS_PATH",
-        "description": "Path to Google Calendar OAuth2 credentials JSON file (alias)",
-        "url": "https://console.cloud.google.com/apis/credentials",
-    },
-    "gmail": {
-        "keyring_name": "gmail_credentials_path",
-        "env_var": "GMAIL_CREDENTIALS_PATH",
-        "description": "Path to Gmail OAuth2 credentials JSON file",
-        "url": "https://console.cloud.google.com/apis/credentials",
-    },
-    "google_drive": {
-        "keyring_name": "google_drive_credentials_path",
-        "env_var": "GOOGLE_DRIVE_CREDENTIALS_PATH",
-        "description": "Path to Google Drive OAuth2 credentials JSON file",
-        "url": "https://console.cloud.google.com/apis/credentials",
-    },
-    "google_tasks": {
-        "keyring_name": "google_tasks_credentials_path",
-        "env_var": "GOOGLE_TASKS_CREDENTIALS_PATH",
-        "description": "Path to Google Tasks OAuth2 credentials JSON file",
+    "google_oauth": {
+        "keyring_name": "google_oauth_credentials_path",
+        "env_var": "GOOGLE_OAUTH_CREDENTIALS_PATH",
+        "description": "Google OAuth2 credentials JSON content/path for all Google APIs",
         "url": "https://console.cloud.google.com/apis/credentials",
     },
     "slack_bot_token": {
