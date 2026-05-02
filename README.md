@@ -251,6 +251,13 @@ The bot responds to @mentions and DMs, uses all Atlas tools, and requests permis
 | `/atlas-briefing tomorrow` | Tomorrow's preview |
 | `/atlas-status` | System health check |
 | `/atlas-note <text>` | Quick note with #tags |
+| `/atlas-task <title> [--due] [--notes]` | Create a Google Task |
+| `/atlas-model [provider:model]` | View or switch LLM model |
+| `/atlas-audit [lines]` | View security audit log |
+| `/atlas-secrets` | View configured secret statuses |
+| `/atlas-permissions list\|revoke` | Manage permissions |
+| `/atlas-notes list\|search\|show` | Manage notes |
+| `/atlas-skill <description>` | Preview AI-generated tool (read-only) |
 
 **Scheduled Morning Briefing:**
 

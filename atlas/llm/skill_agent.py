@@ -98,19 +98,92 @@ def _derive_names(description: str) -> tuple[str, str, str]:
     display_name = base.replace("_", " ").title()
     return module_name, factory_name, display_name
 
+# --- Safety: AST-based import restriction check ---
 
-async def run_skill_agent(description: str, tools_dir: Path, loader_path: Path) -> None:
+_BLOCKED_IMPORTS = {
+    "subprocess", "shutil", "ctypes", "multiprocessing",
+}
+
+_BLOCKED_CALLS = {
+    "os.system", "os.popen", "os.exec", "os.execv", "os.execve",
+    "os.spawn", "os.spawnl", "os.spawnle",
+    "eval", "exec", "compile", "__import__",
+    "shutil.rmtree", "shutil.move",
+}
+
+
+def _validate_generated_code(code: str) -> tuple[bool, str]:
+    """AST-based safety check on LLM-generated tool code.
+    
+    Returns:
+        (is_safe, reason) — False with an explanation if dangerous constructs found.
+    """
+    import ast
+    
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        return False, f"Generated code has a syntax error: {e}"
+    
+    for node in ast.walk(tree):
+        # Check imports
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                mod = alias.name.split(".")[0]
+                if mod in _BLOCKED_IMPORTS:
+                    return False, f"Blocked import: '{alias.name}' (dangerous module)"
+        
+        if isinstance(node, ast.ImportFrom):
+            if node.module:
+                mod = node.module.split(".")[0]
+                if mod in _BLOCKED_IMPORTS:
+                    return False, f"Blocked import: 'from {node.module}' (dangerous module)"
+        
+        # Check dangerous function calls: eval(), exec(), os.system(), etc.
+        if isinstance(node, ast.Call):
+            func = node.func
+            call_name = ""
+            if isinstance(func, ast.Name):
+                call_name = func.id
+            elif isinstance(func, ast.Attribute):
+                # e.g. os.system
+                parts = []
+                obj = func
+                while isinstance(obj, ast.Attribute):
+                    parts.append(obj.attr)
+                    obj = obj.value
+                if isinstance(obj, ast.Name):
+                    parts.append(obj.id)
+                call_name = ".".join(reversed(parts))
+            
+            if call_name in _BLOCKED_CALLS:
+                return False, f"Blocked call: '{call_name}' (dangerous function)"
+    
+    return True, ""
+
+
+async def run_skill_agent(
+    description: str,
+    tools_dir: Path,
+    loader_path: Path,
+    interactive: bool = True,
+) -> None:
     """Main entrypoint: generate, preview, and optionally write a new skill.
 
     Args:
         description: Natural-language description of the desired tool.
         tools_dir: Path to atlas/tools/ directory.
         loader_path: Path to atlas/tools/tools_loader.py.
+        interactive: If False (e.g. Slack), code is shown but NOT written.
     """
     console.print(f"\n[bold cyan]🛠  Skill Agent[/bold cyan] — generating: [italic]{description}[/italic]\n")
 
     module_name, factory_name, display_name = _derive_names(description)
-    target_file = tools_dir / f"{module_name}.py"
+    
+    # Write community skills to a separate directory, not the main tools dir
+    community_dir = tools_dir / "community"
+    community_dir.mkdir(exist_ok=True)
+    target_file = community_dir / f"{module_name}.py"
 
     # --- Step 1: Generate the tool module ---
     console.print("[dim]→ Asking local LLM to generate tool code...[/dim]")
@@ -120,13 +193,33 @@ async def run_skill_agent(description: str, tools_dir: Path, loader_path: Path) 
     )
     code = _extract_code(raw_code)
 
-    # --- Step 2: Preview ---
+    # --- Step 2: AST Safety Validation ---
+    is_safe, reason = _validate_generated_code(code)
+    if not is_safe:
+        console.print(f"\n[red bold]⛔ Safety Check Failed[/red bold]: {reason}")
+        console.print("[yellow]The generated code contains potentially dangerous constructs and will NOT be written.[/yellow]")
+        console.print("[dim]You can manually review and save the code if you believe it is safe.[/dim]\n")
+        # Still show the code for inspection
+        console.print(Panel(
+            Syntax(code, "python", theme="monokai", line_numbers=True),
+            title=f"[bold red]BLOCKED: {target_file.name}[/bold red]",
+            border_style="red",
+        ))
+        return
+
+    # --- Step 3: Preview ---
     console.print()
     console.print(Panel(
         Syntax(code, "python", theme="monokai", line_numbers=True),
         title=f"[bold green]Generated: {target_file.name}[/bold green]",
         border_style="green",
     ))
+    
+    # --- Step 4: Interactive confirmation (disabled for Slack/non-interactive) ---
+    if not interactive:
+        console.print("[yellow]⚠ Non-interactive mode (Slack): code is displayed but NOT written to disk.[/yellow]")
+        console.print("[dim]Use the CLI ('atlas skill') to write generated tools.[/dim]\n")
+        return
 
     if target_file.exists():
         console.print(f"[yellow]⚠  {target_file} already exists.[/yellow]")
@@ -134,20 +227,20 @@ async def run_skill_agent(description: str, tools_dir: Path, loader_path: Path) 
             console.print("[dim]Aborted.[/dim]")
             return
 
-    if not Confirm.ask("\n[bold]Write this file to atlas/tools/?[/bold]", default=True):
+    if not Confirm.ask("\n[bold]Write this file to atlas/tools/community/?[/bold]", default=True):
         console.print("[dim]Skill generation cancelled.[/dim]")
         return
 
-    # --- Step 3: Write the tool module ---
+    # --- Step 5: Write the tool module ---
     target_file.write_text(code)
     console.print(f"[green]✓ Written:[/green] {target_file}")
 
-    # --- Step 4: Register in tools_loader.py ---
+    # --- Step 6: Register in tools_loader.py ---
     console.print("\n[dim]→ Patching tools_loader.py...[/dim]")
     loader_src = loader_path.read_text()
 
     # Insert import before the return block
-    import_line = f"    from atlas.tools.{module_name} import {factory_name}\n"
+    import_line = f"    from atlas.tools.community.{module_name} import {factory_name}\n"
     if import_line.strip() not in loader_src:
         # Inject after existing imports inside _build_tool_registry
         loader_src = loader_src.replace(

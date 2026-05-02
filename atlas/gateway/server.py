@@ -85,6 +85,10 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    # Clean up ephemeral token file so no stale credential sits on disk
+    token_path = get_data_dir() / ".gateway_token"
+    if token_path.exists():
+        token_path.unlink()
     if _gateway:
         await _gateway.close()
 

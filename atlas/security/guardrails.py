@@ -114,20 +114,25 @@ class GuardrailEngine:
         return False
     
     def _leaks_credentials(self, action: dict[str, Any]) -> bool:
-        """Check for potential credential exfiltration."""
-        # Check if action involves sending data externally
-        if action.get("type") not in ("network_request", "shell_command"):
+        """Check for potential credential exfiltration.
+        
+        Checks both outbound network/shell actions AND LLM output
+        for patterns that look like raw credentials being leaked.
+        """
+        action_type = action.get("type", "")
+        if action_type not in ("network_request", "shell_command", "llm_output"):
             return False
         
-        content = str(action.get("data", "")) + str(action.get("command", ""))
+        content = str(action.get("data", "")) + str(action.get("command", "")) + str(action.get("text", ""))
         
         # Look for credential patterns
         credential_patterns = [
-            r"(api[_-]?key|apikey)",
-            r"(password|passwd|pwd)",
-            r"(secret|token)",
-            r"(aws[_-]?access|aws[_-]?secret)",
-            r"(private[_-]?key)",
+            r"(api[_-]?key|apikey)\s*[=:]\s*[\"']?[\w\-]{20,}",
+            r"(password|passwd|pwd)\s*[=:]\s*[\"']?\S{8,}",
+            r"(secret|token)\s*[=:]\s*[\"']?[\w\-]{20,}",
+            r"(aws[_-]?access|aws[_-]?secret)\s*[=:]\s*[\"']?[\w\-]{16,}",
+            r"(private[_-]?key)\s*[=:]\s*[\"']?[\w\-]{20,}",
+            r"-----BEGIN\s+(RSA|EC|OPENSSH)?\s*PRIVATE\s+KEY-----",
         ]
         
         return any(re.search(p, content, re.IGNORECASE) for p in credential_patterns)

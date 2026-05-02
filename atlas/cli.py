@@ -785,13 +785,16 @@ def revoke_permission(
     else:
         permission, scope = permission_id, "*"
     
-    key = f"{permission}:{scope}"
-    if key not in pm.grants:
-        console.print(f"[yellow]Permission '{key}' not found[/yellow]")
+    match = next(
+        (g for g in pm.grants if g.permission == permission and g.scope == scope),
+        None,
+    )
+    if not match:
+        console.print(f"[yellow]Permission '{permission_id}' not found[/yellow]")
         return
         
     asyncio.run(pm.revoke(permission, scope))
-    console.print(f"[green]✓ Permission '{key}' revoked[/green]")
+    console.print(f"[green]✓ Permission '{permission_id}' revoked[/green]")
 
 
 @permissions_app.command("reset")
@@ -817,12 +820,18 @@ def show_permission(
     """Show detailed information for a specific permission grant."""
     pm = get_permission_manager()
     
-    key = permission_id
-    if key not in pm.grants:
+    if ":" in permission_id:
+        perm_name, scope = permission_id.split(":", 1)
+    else:
+        perm_name, scope = permission_id, "*"
+    
+    grant = next(
+        (g for g in pm.grants if g.permission == perm_name and g.scope == scope),
+        None,
+    )
+    if not grant:
         console.print(f"[yellow]Permission '{permission_id}' not found[/yellow]")
         return
-        
-    grant = pm.grants[key]
     
     console.print(Panel(
         f"[bold]Permission:[/bold] {grant.permission}\n"

@@ -12,10 +12,12 @@ def should_continue(state: dict[str, Any]) -> Literal["tools", "memory", "permis
     - "tools": If the LLM requested tool calls
     - "memory": If memory context needs refresh
     - "permission": If there are pending permission requests
-    - "end": If the response is complete
+    - "end": If the response is complete or max tool rounds reached
     """
     from rich.console import Console
     console = Console()
+    
+    MAX_TOOL_ROUNDS = 15
     
     messages = state.get("messages", [])
     
@@ -30,10 +32,16 @@ def should_continue(state: dict[str, Any]) -> Literal["tools", "memory", "permis
         console.print("[dim]→ Router: Pending permissions → permission node[/dim]")
         return "permission"
     
+    # Enforce tool-call loop limit
+    tool_rounds = state.get("tool_rounds", 0)
+    if tool_rounds >= MAX_TOOL_ROUNDS:
+        console.print(f"[yellow]⚠ Router: Maximum tool rounds ({MAX_TOOL_ROUNDS}) reached → ending[/yellow]")
+        return "end"
+    
     # Check if LLM requested tool calls
     if isinstance(last_message, AIMessage):
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-            console.print(f"[dim]→ Router: {len(last_message.tool_calls)} tool calls → tools node[/dim]")
+            console.print(f"[dim]→ Router: {len(last_message.tool_calls)} tool calls → tools node (round {tool_rounds + 1}/{MAX_TOOL_ROUNDS})[/dim]")
             return "tools"
     elif isinstance(last_message, dict):
         if last_message.get("tool_calls"):
@@ -55,7 +63,11 @@ def route_after_tools(state: dict[str, Any]) -> Literal["orchestrator", "permiss
     
     If tools generated permission requests, go to permission node.
     Otherwise, return to orchestrator for next reasoning step.
+    Increments the tool_rounds counter to enforce the loop limit.
     """
+    # Increment tool round counter
+    state["tool_rounds"] = state.get("tool_rounds", 0) + 1
+    
     if state.get("pending_confirmations"):
         return "permission"
     return "orchestrator"

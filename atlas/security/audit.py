@@ -202,3 +202,45 @@ class AuditLogger:
                     entries.append(json.loads(line))
         
         return entries[-n:]
+    
+    def _get_all_log_files(self) -> list[Path]:
+        """Return all audit log files sorted chronologically."""
+        return sorted(self.log_dir.glob("audit_*.jsonl"))
+    
+    def verify_all(self) -> dict[str, bool]:
+        """Verify integrity of ALL audit log files (not just today's).
+        
+        Returns:
+            Dict mapping log filename to verification result (True = intact).
+        """
+        results = {}
+        for log_file in self._get_all_log_files():
+            prev_hash = None
+            intact = True
+            try:
+                with open(log_file) as f:
+                    for line in f:
+                        if not line.strip():
+                            continue
+                        entry = json.loads(line)
+                        
+                        if entry.get("prev_hash") != prev_hash:
+                            intact = False
+                            break
+                        
+                        check_entry = {k: v for k, v in entry.items() if k != "hash"}
+                        check_str = json.dumps(check_entry, sort_keys=True).encode()
+                        secret_key = get_encryption_key()
+                        expected = hmac.new(secret_key, check_str, hashlib.sha256).hexdigest()
+                        
+                        if entry.get("hash") != expected:
+                            intact = False
+                            break
+                        
+                        prev_hash = entry["hash"]
+            except Exception:
+                intact = False
+            
+            results[log_file.name] = intact
+        
+        return results

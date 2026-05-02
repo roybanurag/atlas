@@ -489,7 +489,12 @@ class SlackBot:
 
         @self.app.command("/atlas-skill")
         async def handle_skill_command(ack, respond, command):
-            """Handle /atlas-skill command."""
+            """Handle /atlas-skill command.
+            
+            Security: Generates and previews code only. Writing to disk is
+            blocked in non-interactive (Slack) mode. Users must use the CLI
+            (`atlas skill`) to persist generated tools.
+            """
             await ack()
             desc = command.get("text", "").strip()
             if not desc:
@@ -500,42 +505,45 @@ class SlackBot:
             
             # Run the generation entirely in the background
             async def generate_skill():
-                from atlas.llm.skill_agent import _generate_with_llm, SKILL_SYSTEM_PROMPT, _extract_code, _derive_names
-                from atlas.config.paths import get_data_dir
-                import os
+                from atlas.llm.skill_agent import (
+                    _generate_with_llm, SKILL_SYSTEM_PROMPT,
+                    _extract_code, _derive_names, _validate_generated_code,
+                )
                 
                 module_name, factory_name, display_name = _derive_names(desc)
-                tools_dir = Path(__file__).parent.parent.parent / "tools"
-                loader_path = tools_dir / "tools_loader.py"
                 
                 try:
-                    # Gen code
-                    prompt=f"Create an Atlas tool for: {desc}\n\nFactory function name must be: {factory_name}"
+                    # Generate code via LLM
+                    prompt = f"Create an Atlas tool for: {desc}\n\nFactory function name must be: {factory_name}"
                     raw_code = await _generate_with_llm(prompt=prompt, system=SKILL_SYSTEM_PROMPT)
                     code = _extract_code(raw_code)
                     
-                    target_file = tools_dir / f"{module_name}.py"
-                    target_file.write_text(code)
-                    
-                    # Patch loader
-                    loader_src = loader_path.read_text()
-                    import_line = f"    from atlas.tools.{module_name} import {factory_name}\n"
-                    if import_line.strip() not in loader_src:
-                        loader_src = loader_src.replace(
-                            "    from atlas.tools.sandbox import create_sandbox_tools\n",
-                            f"    from atlas.tools.sandbox import create_sandbox_tools\n{import_line}",
+                    # AST safety validation — block dangerous constructs
+                    is_safe, reason = _validate_generated_code(code)
+                    if not is_safe:
+                        await self.app.client.chat_postMessage(
+                            channel=command["channel_id"],
+                            text=(
+                                f"⛔ *Safety Check Failed for `{display_name}`*\n"
+                                f"Reason: {reason}\n\n"
+                                f"The generated code contains potentially dangerous "
+                                f"constructs and will NOT be written.\n"
+                                f"```python\n{code[:800]}\n```"
+                            ),
                         )
-                    new_entry = f'        ("{display_name}", lambda: {factory_name}()),\n'
-                    if new_entry.strip() not in loader_src:
-                        loader_src = loader_src.replace(
-                            '        ("Briefing",      lambda: create_briefing_tool(data_dir)),',
-                            f'        ("Briefing",      lambda: create_briefing_tool(data_dir)),\n{new_entry.rstrip(",")},',
-                        )
-                    loader_path.write_text(loader_src)
+                        return
                     
+                    # Non-interactive mode: display code but do NOT write to disk
                     await self.app.client.chat_postMessage(
                         channel=command["channel_id"],
-                        text=f"✅ *Skill `{display_name}` successfully created and registered!*\nRestart the Atlas agent for the new tool to take effect.\n```python\n{code[:800]}... (truncated)\n```"
+                        text=(
+                            f"✅ *Skill `{display_name}` generated successfully (preview only)*\n"
+                            f"⚠️ For security, Slack cannot write tools to disk.\n"
+                            f"To persist this skill, run on the host:\n"
+                            f"```atlas skill \"{desc}\"```\n\n"
+                            f"*Generated code:*\n"
+                            f"```python\n{code[:1500]}\n```"
+                        ),
                     )
                 except Exception as e:
                     await self.app.client.chat_postMessage(

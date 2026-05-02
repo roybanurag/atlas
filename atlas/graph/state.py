@@ -31,3 +31,6 @@ class AgentState(TypedDict, total=False):
     
     # Pending actions that require user confirmation
     pending_confirmations: list[dict[str, Any]]
+    
+    # Tool-call loop counter (prevents infinite reasoning loops)
+    tool_rounds: int

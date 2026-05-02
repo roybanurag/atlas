@@ -314,7 +314,9 @@ class PermissionManager:
                 if grant_data.get("granted_at"):
                     grant_data["granted_at"] = datetime.fromisoformat(grant_data["granted_at"])
                 if grant_data.get("expires_at"):
-                    grant_data["expires_at"] = datetime.fromisoformat(grant_data["expires_at"])
+                    # "ONCE" sentinel is kept as-is; only parse ISO strings
+                    if grant_data["expires_at"] != "ONCE":
+                        grant_data["expires_at"] = datetime.fromisoformat(grant_data["expires_at"])
                 
                 self.grants.append(PermissionGrant(**grant_data))
         except Exception as e:
@@ -331,11 +333,13 @@ class PermissionManager:
         
         for grant in self.grants:
             grant_dict = asdict(grant)
-            # Serialize datetimes
+            # Serialize datetimes (expires_at may be datetime, "ONCE" sentinel, or None)
             if grant_dict.get("granted_at"):
                 grant_dict["granted_at"] = grant.granted_at.isoformat()
             if grant_dict.get("expires_at"):
-                grant_dict["expires_at"] = grant.expires_at.isoformat()
+                if isinstance(grant.expires_at, datetime):
+                    grant_dict["expires_at"] = grant.expires_at.isoformat()
+                # else: keep "ONCE" string as-is
             data["grants"].append(grant_dict)
             
         json_data = json.dumps(data).encode('utf-8')
@@ -386,7 +390,7 @@ class PermissionManager:
         
         # 1. & 2. Check all grants (exact and wildcard)
         active_grants = []
-        has_permission = False
+        matched_grant = None  # The first matching grant (granted or denied)
         
         for grant in self.grants:
             # Check expiry
@@ -395,21 +399,29 @@ class PermissionManager:
                 
             active_grants.append(grant)
             
-            # If we already found permission we don't need to check further, 
-            # but we continue loop to clean up all expired grants
-            if not has_permission:
+            # Find the first matching grant; continue loop to clean expired
+            if matched_grant is None:
                 if grant.permission == permission and grant.scope == scope:
-                    has_permission = grant.granted
+                    matched_grant = grant
                 elif fnmatch(permission, grant.permission) and fnmatch(scope, grant.scope):
-                    has_permission = grant.granted
+                    matched_grant = grant
                     
         # Update grants list if we cleaned up expired ones
         if len(active_grants) != len(self.grants):
             self.grants = active_grants
             self._save_grants()
-            
-        if has_permission:
-            return True
+        
+        # If we found a matching grant, honor it (both grants AND denials)
+        if matched_grant is not None:
+            if matched_grant.granted:
+                # Consume ONCE grants after first use
+                if matched_grant.expires_at == "ONCE":
+                    self.grants = [g for g in self.grants if g is not matched_grant]
+                    self._save_grants()
+                return True
+            else:
+                # Denial is explicitly honored — do NOT fall through to re-prompt
+                return False
         
         # 3. Check defaults
         perm_config = self.permissions.get(permission)
@@ -510,13 +522,18 @@ class PermissionManager:
         
         return granted
     
-    def _calculate_expiry(self, duration: GrantDuration | str) -> datetime | None:
-        """Calculate expiry time from duration."""
+    def _calculate_expiry(self, duration: GrantDuration | str) -> datetime | str | None:
+        """Calculate expiry time from duration.
+        
+        Returns:
+            datetime for timed grants, "ONCE" sentinel for single-use,
+            or None for session/forever grants.
+        """
         if isinstance(duration, str):
             duration = GrantDuration(duration)
         
         if duration == GrantDuration.ONCE:
-            return datetime.now()  # Expires immediately after use
+            return "ONCE"  # Sentinel — consumed after first successful check
         elif duration == GrantDuration.SESSION:
             return None  # Expires when process ends
         elif duration == GrantDuration.HOUR:
@@ -618,7 +635,7 @@ class PermissionManager:
         now = datetime.now()
         active = []
         for grant in self.grants:
-            if grant.expires_at and grant.expires_at <= now:
+            if isinstance(grant.expires_at, datetime) and grant.expires_at <= now:
                  continue
                  
             active.append(grant)

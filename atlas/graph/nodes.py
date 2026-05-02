@@ -99,6 +99,15 @@ async def orchestrator_node(state: dict[str, Any], config: RunnableConfig) -> di
     # Get LLM response
     response = await llm.ainvoke(messages)
     
+    # --- Output Guardrails ---
+    # Scan LLM output for credential leakage or injection relay
+    if hasattr(response, "content") and response.content:
+        output_action = {"type": "llm_output", "text": response.content}
+        out_allowed, out_violation = guardrails.evaluate_sync(output_action)
+        if not out_allowed:
+            console.print(f"[red]⚠ Security filtered LLM output: {out_violation}[/red]")
+            return {"messages": [AIMessage(content="I generated a response that was blocked by security filters. Please rephrase your request.")]}
+    
     # Show what the LLM said
     if hasattr(response, "content"):
         # In verbose mode, run_agent handles the full display

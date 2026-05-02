@@ -95,13 +95,19 @@ def execute_in_sandbox(command: list[str], input_str: str | None = None, timeout
     except Exception as e:
         return f"System Error: Failed to build or find sandbox Docker image: {e}"
 
-    # We use --network none for total offline isolation, and drop capabilities
+    # We use --network none for total offline isolation, and drop capabilities.
+    # Resource limits prevent OOM, fork-bombs, and disk-fill attacks.
     docker_cmd = [
         "docker", "run", "--rm", "-i",
         "--network", "none",
         "--cap-drop", "ALL",
         "--security-opt", "no-new-privileges:true",
-        IMAGE_NAME
+        "--memory", "512m",
+        "--cpus", "1",
+        "--pids-limit", "64",
+        "--read-only",
+        "--tmpfs", "/tmp:size=64m",
+        IMAGE_NAME,
     ] + command
 
     try:

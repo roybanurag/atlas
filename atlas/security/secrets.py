@@ -36,8 +36,15 @@ class SecretManager:
             raw_json = fernet.decrypt(encrypted_blob)
             self._vault_cache = json.loads(raw_json)
         except Exception as e:
-            print(f"Failed to load encrypted vault: {e}")
-            self._vault_cache = {}
+            # Fail loudly instead of silently wiping all stored secrets.
+            # This prevents accidental data loss when the master key changes
+            # or the vault file is corrupted/replaced.
+            raise RuntimeError(
+                f"Failed to decrypt secrets vault at {self.vault_path}. "
+                f"This may indicate a corrupted vault or a changed master key. "
+                f"Original error: {e}\n"
+                f"If you intentionally reset credentials, delete '{self.vault_path}' and re-run."
+            ) from e
             
         return self._vault_cache
 

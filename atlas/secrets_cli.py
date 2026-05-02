@@ -82,9 +82,11 @@ def secrets_command(
                 console.print("[red]✗[/red] Invalid JSON provided. Please provide valid credentials.json content.")
                 return
                 
-            # Write it to the config path
+            # Write it to the config path with restrictive permissions
             cred_path = get_config_dir() / "google_oauth.json"
             cred_path.write_text(pasted_text)
+            import os
+            os.chmod(str(cred_path), 0o600)
             
             # The value we store inside keyring is just the path
             api_key = str(cred_path)

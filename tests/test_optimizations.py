@@ -13,33 +13,31 @@ def test_google_service_auth_config():
     """Test GoogleServiceAuth instances are configured correctly."""
     from atlas.tools.google_auth import GMAIL_AUTH, CALENDAR_AUTH, DRIVE_AUTH, TASKS_AUTH
     
+    # All services now use the unified google_oauth credential
+    
     # Gmail
     assert GMAIL_AUTH.service_name == "Gmail"
-    assert GMAIL_AUTH.api_key_name == "gmail"
+    assert GMAIL_AUTH.api_key_name == "google_oauth"
     assert "gmail.readonly" in GMAIL_AUTH.scopes[0]
     assert GMAIL_AUTH.token_key == "gmail_token.json"
-    assert GMAIL_AUTH.fallback_api_keys == []
     
     # Calendar
     assert CALENDAR_AUTH.service_name == "Calendar"
-    assert CALENDAR_AUTH.api_key_name == "calendar"
+    assert CALENDAR_AUTH.api_key_name == "google_oauth"
     assert "calendar.readonly" in CALENDAR_AUTH.scopes[0]
     assert CALENDAR_AUTH.token_key == "calendar_token.json"
-    assert CALENDAR_AUTH.fallback_api_keys == ["gmail"]
     
     # Drive
     assert DRIVE_AUTH.service_name == "Google Drive"
-    assert DRIVE_AUTH.api_key_name == "google_drive"
+    assert DRIVE_AUTH.api_key_name == "google_oauth"
     assert "drive" in DRIVE_AUTH.scopes[0]
     assert DRIVE_AUTH.token_key == "drive_token.json"
-    assert DRIVE_AUTH.fallback_api_keys == []
     
     # Tasks
     assert TASKS_AUTH.service_name == "Google Tasks"
-    assert TASKS_AUTH.api_key_name == "google_tasks"
+    assert TASKS_AUTH.api_key_name == "google_oauth"
     assert "tasks" in TASKS_AUTH.scopes[0]
     assert TASKS_AUTH.token_key == "tasks_token.json"
-    assert TASKS_AUTH.fallback_api_keys == ["calendar", "gmail"]
     
     print("✓ GoogleServiceAuth instances configured correctly")
 
@@ -53,7 +51,6 @@ def test_google_service_auth_error_messages():
         scopes=["test.scope"],
         token_filename="test_token.json",
         api_key_name="test_key",
-        fallback_api_keys=["fallback1"],
     )
     
     try:

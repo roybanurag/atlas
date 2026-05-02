@@ -291,6 +291,7 @@ atlas/
 │   │   └── google_auth.py             # Google OAuth2 manager
 │   ├── tools/                         # Tool implementations
 │   │   ├── tools_loader.py            # Dynamic tool loading
+│   │   ├── sandbox.py                 # Docker-isolated code execution
 │   │   ├── web_search.py              # Tavily web search
 │   │   ├── web_reader.py              # URL content extraction
 │   │   ├── gmail.py                   # Gmail tools
@@ -302,7 +303,8 @@ atlas/
 │   │   └── briefing.py                # Daily briefing generator
 │   └── integrations/                  # External integrations
 │       └── slack/                     # Slack bot
-│           └── bot.py
+│           ├── bot.py                 # Main Slack bot (slash commands)
+│           └── handler.py             # Event/message handler
 ├── docs/                              # Technical documentation
 │   ├── TECHNICAL.md                   # This file
 │   ├── GATEWAY.md                     # Gateway security deep-dive
@@ -444,10 +446,27 @@ TOOL_PERMISSIONS = {
 ### Guardrails
 
 The `GuardrailEngine` intercepts user inputs and actions to detect potentially harmful operations:
-- **Dangerous Commands**: Filters shell commands like `rm -rf`, `sudo rm`.
-- **Sensitive Paths**: Protects paths like `~/.ssh/` and system files.
-- **Credential Protection**: Detects patterns resembling API keys or passwords.
-- **Prompt Injection**: Detects jailbreak attempts, ensuring the LLM isn't manipulated to ignore its principles.
+- **Dangerous Commands**: Filters shell commands like `rm -rf`, `sudo rm`, `curl|bash`.
+- **Sensitive Paths**: Protects paths like `~/.ssh/`, `~/.aws/credentials`, and system files.
+- **Credential Protection**: Detects patterns resembling API keys, passwords, or private keys in outbound actions and LLM output.
+- **Prompt Injection**: Detects jailbreak attempts ("ignore previous instructions", "bypass guardrails").
+
+### Code Sandbox
+
+The `python_sandbox` and `bash_sandbox` tools execute user/agent code inside an ephemeral Docker container with strict isolation:
+
+| Security Control | Setting |
+|---|---|
+| Network | `--network none` (fully offline) |
+| Capabilities | `--cap-drop ALL` |
+| Filesystem | `--read-only` with 64 MB `/tmp` tmpfs |
+| Memory | `512m` hard limit |
+| CPU | 1 core |
+| PIDs | Max 64 (fork-bomb protection) |
+| Privileges | `--security-opt no-new-privileges:true` |
+| User | Non-root `sandboxuser` |
+
+The sandbox image (`atlas-sandbox:latest`) is auto-built on first use with pre-installed libraries (pandas, numpy, requests, beautifulsoup4, scipy, yfinance, matplotlib).
 
 ### Advanced Configuration
 
@@ -587,16 +606,19 @@ pytest tests/test_security.py
 
 ### Adding New Tools
 
-1. **Create tool function** in `atlas/tools/builtin/`:
+1. **Create tool function** in `atlas/tools/`:
 
 ```python
 from langchain_core.tools import tool
 
-@tool
+@tool("my_new_tool")
 def my_new_tool(query: str) -> str:
     """Tool description for LLM."""
     # Implementation
     return result
+
+def create_my_tools() -> list:
+    return [my_new_tool]
 ```
 
 2. **Add permission mapping** in `PermissionManager`:
@@ -610,16 +632,13 @@ TOOL_PERMISSIONS = {
 3. **Export tool** in `atlas/tools/__init__.py`:
 
 ```python
-from .builtin.my_tool import my_new_tool
-
-__all__ = [..., "my_new_tool"]
+from .my_tool import create_my_tools
 ```
 
-4. **Load tool** in `cli.py`:
+4. **Register in tools_loader.py** — add to `_build_tool_registry()`:
 
 ```python
-from atlas.tools import my_new_tool
-tools.append(my_new_tool())
+("My Tool", lambda: create_my_tools()),
 ```
 
 ### Adding New Integrations
@@ -687,8 +706,9 @@ pytest tests/test_graph.py -v
 | `test_principles.py` | — | `config/principles` |
 | `test_drive_tool.py` | 2 | `tools/google_drive` |
 | `test_tavily_tool.py` | 2 | `tools/web_search` |
+| `test_audit_remaining.py` | 2 | Gateway token cleanup, Slack skill safety |
 
-**Total: 177 passing, 5 skipped**
+**Total: 179+ passing, 5 skipped**
 
 ---
 
